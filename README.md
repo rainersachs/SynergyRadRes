@@ -1,2 +1,2 @@
 # SynergyRadRes
-Scripts for the main calculations in Radiation Research synergy article (Dae Woong Ham et al.).
+Scripts for the main calculations in synergy MS (Dae Woong Ham et al.) submitted to Radiation Research.
