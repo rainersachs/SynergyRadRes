@@ -1,0 +1,121 @@
+#Calibration
+```{r}
+library(ggplot2) #library for plotting
+library(deSolve) # library for solving differential equations
+library(minpack.lm) #for non-linear regression package
+d = seq(0, 4, 0.1)
+set.seed(3)
+random_noise = 0.01*rnorm(41)
+
+#First IDER
+IDER_1 = function(d, a, b) {
+  1 - exp(-(a*d + b*d^2))
+} 
+H_1 = IDER_1(d = d, a = 1, b = 2) + random_noise
+data_1 = data.frame(d = d, H = H_1)
+
+#Second IDER
+IDER_2 = function(d, k) {
+  1 - exp(-(exp(k*d) - 1))
+}
+H_2 = IDER_2(d = d, k = 4) + random_noise
+data_2 = data.frame(d = d, H = H_2)
+
+
+#third IDER
+dE = function(t, E, parms) {
+    c = parms$c;
+    a = parms$a;
+    dH = c*(a-log(1-E))*(0.5+log(1-E))*(1-E)
+    return(list(dH))
+}
+IDER_3 = function(d, c, a) {
+  yini = c(H= 0)
+  out = ode(y = yini, times = d, func = dE, parms = list(c = c, a = a))
+  return(out[, 2])
+}
+
+H_3 = IDER_3(d = d, c = 10, a = 0.2) + random_noise
+data_3 = data.frame(d = d, H = H_3)
+parms = c(c = 10, a = 0.2)
+
+ssqres = function(parms) {
+  cinit = c(H = 0)
+  d = seq(0, 4, 0.1)
+  c = parms[1]; a = parms[2]
+  out = ode(y = cinit, times = d, func = dE, parms = list(c = c, a = a))
+  ssqres = out[,2] - data_3$H
+  return(ssqres)
+}
+
+calibration_1 = nlsLM(H ~ IDER_1(d, a, b), data = data_1, start = list(a = 1, b = 2))
+coef(calibration_1)
+calibration_2 = nlsLM(H ~ IDER_2(d, k), data = data_2, start = list(k = 4))
+coef(calibration_2)
+calibration_3 = nls.lm(par = parms, fn = ssqres)
+coef(calibration_3)
+
+#Plotting all the calibration
+setEPS()
+postscript("IDER_1 calibration.eps", width = 10, height = 7)
+plot(x = d, y = data_1$H)
+lines(x = d, y = IDER_1(d = d, a = coef(calibration_1)[1], b = coef(calibration_1)[2]), col = "blue")
+dev.off()
+
+setEPS()
+postscript("IDER_2 calibration.eps", width = 10, height = 7)
+plot(x = d, y = data_2$H)
+lines(x = d, y = IDER_2(d = d, k = coef(calibration_2)[1]), col = "purple")
+dev.off()
+
+setEPS()
+postscript("IDER_3 calibration.eps", width = 10, height = 7)
+plot(x = d, y = data_3$H)
+lines(x = d, y = IDER_3(d = d, c = coef(calibration_3)[1], a = coef(calibration_3)[2]), col = "green")
+dev.off()
+```
+
+#Mixture
+```{r}
+dE_1 = function(d, a, b) {
+  (2*b*d + a)*(exp(-b*d^2 - a*d))
+}
+
+dE_2 = function(d, k) {
+  k*exp(-exp(k*d) + k*d + 1)
+}
+
+dE_3 = function(E, a, c) {
+  c*(a-log(1-E))*(0.5+log(1-E))*(1-E)
+}
+
+MIXDER_function = function(r , a1 = coef(calibration_1)[1], b = coef(calibration_1)[2], k = coef(calibration_2), c = coef(calibration_3)[1], a2 = coef(calibration_3)[2] , d)  {
+  dE=function(yini,State,Pars){
+  a1 = a1; b = b; a2 = a2; k = k; c = c;
+  with(as.list(c(State, Pars)), {
+    u = vector(length = 3)
+    u[1] = uniroot(function(d) (1 - exp(-(a1*d + b*d^2))) - I, lower = 0, upper = 1, extendInt = "yes", tol = 10^-10)$root 
+    u[2] = uniroot(function(d) (1 - exp(-(exp(k*d) - 1))) - I, lower = 0, upper = 1, extendInt = "yes", tol = 10^-10)$root
+    dI = vector(length = 3)
+    dI[1] = r[1]*dE_1(d = u[1], a = a1, b = b)
+    dI[2] = r[2]*dE_2(d = u[2], k = k)
+    dI[3] = r[3]*dE_3(E = I, a = a2, c = c)
+    dI = sum(dI)
+    return(list(c(dI)))
+      })
+    }
+  pars = NULL; yini = c(I= 0); d = d
+  out = ode(yini,times = d, dE, pars, method = "radau")
+  return(out)
+}
+d = seq(0, 4, 0.05)
+
+setEPS()
+postscript("mouse_MIXDER_one_third_calibrated.eps", width = 10, height = 7)
+plot(x = d, y = IDER_2(d = d, k = coef(calibration_2)), col = "purple", type = "l")
+lines(x = d, y = MIXDER_function(r = c(0.33333, 0.33333, 0.33333), d = d)[, 2], col = "red")
+lines(x = d, y = IDER_1(d = d, a = coef(calibration_1)[1], b = coef(calibration_1)[2]), col = "blue")
+lines(x = d, y = IDER_3(d = d, c = coef(calibration_3)[1], a = coef(calibration_3)[2]), col = "green")
+dev.off()
+```
+
