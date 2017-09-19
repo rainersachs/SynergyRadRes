@@ -1,6 +1,6 @@
 rm(list=ls())
 d=seq(0,1,by=.01); ppi=3.14159
-E1=100*(1-exp(-d^2*10000))+2*d
+E1=100*(1-exp(-d^2*10000))+5*d
 plot(c(0,1),c(0,140), bty='l')
 lines(d,E1)
 E2=tan(ppi*d/2)
