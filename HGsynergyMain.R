@@ -1,23 +1,19 @@
 #   Filename: HGsynergyMain_merge2.R 
-#   Purpose: Concerns radiogenic mouse HG tumorigenesis.
+#   Purpose: Concerns radiogenic, mainly high LET, mouse HG tumorigenesis and possible synergy between components of a mixed radiation field.
 
-#   Copyright: (C) 2017 Mark Ebert, Edward Huang, Dae Woong Ham, Yimin Lin, and Ray Sachs
- 
-#   This program is free software: you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License version 3 as published 
-#   by the Free Software Foundation.
+#   #   This program is open-source free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License version 3 as published by the Free Software Foundation.
  
 #   This program is distributed in the hope that it will be useful,
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the License for more details.
 
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#   Attribution Information: This R script was developed at UC Berkeley.
-#   < authors and contributions to be added later > 
-
+#   Attribution Information: This R script was developed at UC Berkeley in 2017 by
+#   Edward Huang, Dae Woong Ham, Yimin Lin, Mark Ebert, and Rainer Sachs
+ 
 #   Relevant references and abbreviations:
 #   ".93Alp" = Alpen et al. "Tumorigenic potential of high-Z, high-LET charged-particle radiations." Rad Res 136:382-391 (1993)
 #   ".94Alp" = Alpen et al. "Fluence-based relative biological effectiveness for charged particle carcinogenesis in mouse Harderian gland." Adv Space Res 14(10): 573-581. (1994).  
@@ -32,7 +28,7 @@ library(minpack.lm) #  non-linear regression
 rm(list=ls())
 #=========================== DATA START ===========================#
 dfr <- data.frame( #  data used in 16Chang; includes data analyzed in .93Alp and .94Alp  
-  dose.1 = c(0.2,0.4,0.6,1.2,2.4,3.2,5.1,7,0.05,0.1,0.15,0.2,0.4,0.8,1.6,0.05,0.1,0.2,0.4,0,0.1,0.2,0.4,0.8,1.6,0.4,0.8,1.6,3.2,0.05,0.1,0.2,0.4,0.8,0.1,0.2,0.4,0.8,0.1,0.2,0.4,0.04,0.08,0.16,0.32,0.033,0.066,0.13,0.26,0.52,.2, .4, .6),
+  dose.1 = c(0.2,0.4,0.6,1.2,2.4,3.2,5.1,7,0.05,0.1,0.15,0.2,0.4,0.8,1.6,0.05,0.1,0.2,0.4,0,0.1,0.2,0.4,0.8,1.6,0.4,0.8,1.6,3.2,0.05,0.1,0.2,0.4,0.8,0.1,0.2,0.4,0.8,0.1,0.2,0.4,0.04,0.08,0.16,0.32,0.033,0.066,0.13,0.26,0.52,.2, .4, .6), #units are Gy
   HG = c(0.091,0.045,0.101,0.169,0.347,0.431,0.667,0.623,0.156,0.215,0.232,0.307,0.325,0.554,0.649,0.123,0.145,0.207,0.31,0.026,0.083,0.25,0.39,0.438,0.424,0.093,0.195,0.302,0.292,0.109,0.054,0.066,0.128,0.286,0.183,0.167,0.396,0.536,0.192,0.234,0.317,0.092,0.131,0.124,0.297,0.082,0.088,0.146,0.236,0.371,.154,.132,.333), #  HG prevalence as defined in 16Chang
   NWeight =.01*c(520,2048,1145,584,313,232,293,221,1162,877,455,409,374,223,320,742,661,347,131,6081,1091,251,244,191,131,645,255,199,111,649,378,973,833,201,468,381,197,109,496,257,185,1902,1063,884,350,1767,1408,874,299,261,322,206,67), #  nominal weight for weighted least squaresregression; see .93Alp. The Lanthanum entries were obtained by measuring the main graph in 17Cuc 
   index=c(rep(1,8),rep(0,17), rep(1,4),  rep(0,24)), #  index=0 for Z>3 ions, 1 otherwise. Not needed in some models
@@ -46,7 +42,7 @@ dfr <- data.frame( #  data used in 16Chang; includes data analyzed in .93Alp and
   comments = c(".93AlpLooksOK", rep("", 7), ".93AlplooksOK", rep('', 11), ".93Alp.no.iso", "not in 17Cuc (or 16Chang?)", rep("", 3), "16Chang all OK?", rep('', 24), ".94Alp","From graphs",'e.g. in 17Cuc')
 ) 
 
-# Data for HG induced by photons from Cs-137 or Co-60 beta decay; from 16Chang (and calibration of LQ model)
+# Data for HG induced by photons from Cs-137 or Co-60 beta decay; from 16Chang (and from our calibration of LQ model)
 ddd <- data.frame(dose.1 = c(0, 0.4, 0.8, 1.6, 3.2, 7, 0, .4, .8, .12, 1.6),
                   HG = c(.026, .048, .093, .137, .322, .462, .0497, .054, .067, .128, .202),
                   NWeight = c(6081.2, 4989.5, 1896.8, 981.1, 522.2, 205.2, 7474.1, 2877.6, 1423.7, 689.9, 514.9),
@@ -56,7 +52,7 @@ ddd <- data.frame(dose.1 = c(0, 0.4, 0.8, 1.6, 3.2, 7, 0, .4, .8, .12, 1.6),
 GeVu <- 0.001 * dfr[, "MeVperu"] #  convert to GeV/u for convenience in a calculation
 dfr[, "Katz"] <- round(dfr[, "Z"] ^2 * (2.57 * GeVu ^2 + 4.781 * GeVu + 2.233) / (2.57 * GeVu ^2 + 4.781 * GeVu), 2) #  special relativistic calculation of Z^2/beta^2. The numerics include conversion from GeV to joules and from u to kg.
 dfr[, "beta"] <- round(dfr[, "Z"] * sqrt(1 / dfr[, "Katz"]), 3) #  i.e. Z*sqrt(beta^2/Z^2) 
-dfr[, "Zeff"] <- round(dfr[, "Z"] * (1 - exp( -125 * dfr[, "Z"] ^ (-2.0 / 3))), 2) #  Barkas formula for Zeff; for us Zeff is almost Z
+dfr[, "Zeff"] <- round(dfr[, "Z"] * (1 - exp( -125 * dfr[, "Z"] ^ (-2.0 / 3))), 2) #  Barkas' formula for Zeff; for us Zeff is almost Z.
 
 dfra <- dfr[c(1:19, 26:53), ] #  removes the zero dose case and the no isograft data
 #=========================== DATA END ===========================#
@@ -65,9 +61,9 @@ dfra <- dfr[c(1:19, 26:53), ] #  removes the zero dose case and the no isograft 
 LQ <- lm(HG ~ dose.1 + I(dose.1 ^ 2), data = ddd) # linear model fit on ddd dataset
 summary(LQ, correlation = T) 
 
-#===================== HZE/NTE MODEL, abbreviated  "hin" for "high non-targeted" =====================# 
+#===================== HZE/NTE MODEL, abbreviated  "hin" for "high, non-targeted"; but incorporates both NTE and TE ===================# 
 # Uses 3 adjustable parameters. There is also an HZE/TE model, abbreviated "hit" for "high targeted" and a "LOW"
-# model for Z <= 3. Both hin and hit are for Z>3 in principle and here have data for Z >= 8.  
+# model for Z <= 3. Both hin and hit are for Z>3 in principle and here have data for Z >= 8; hereall Z>3 have LET >= 25 keV/micron 
 
 dfrHZE <- subset(dfra, Z > 3) # look only at HZE not at much lower Z and LET ions. # In next line phi controls how fast NTE build up from zero; not really needed during calibration since phi*Dose>>1 at every observed Dose !=0. phi needed for later synergy calculations.
 
@@ -77,14 +73,14 @@ hinm <- nls(HG ~ .0275 + (1 - exp ( -0.01 * (aa1 * L * dose.1 * exp( -aa2 * L) +
             weights = NWeight,
             start = list(aa1 = .9, aa2 = .01, kk1 = 6)) 
 summary(hinm, correlation = T); vcov(hinm) #  parameter values & accuracy; variance-covariance matrix RKSB
-hin.c <- coef(hinm) #  calibrated central values of the 3 parameters. Next is the IDER, = 0 at dose 0
+hin.c <- coef(hinm) #  calibrated central values of the 3 parameters. Next put these values into the hazard function and then the IDER
 hanC <- function(dose.1,L) { #  calibrated hazard function "hanC" is for hazard non-targeted calibrated
   0.01 * (hin.c[1] * L * dose.1 * exp(-hin.c[2] * L) + (1 - exp(- phi * dose.1)) * hin.c[3])
   } 
 Calculate.hinC <- function(dose.1, L) {
   1 - exp(-hanC(dose.1, L)) #  Calibrated HZE NTE IDER
 }
-######### TE model #########
+######### TE model. Similar to HZE NTE model but assumes non-targeted effects are negligible #########
 hitm <- nls(HG ~ .0275 + (1 - exp ( -0.01 * (aate1 * L * dose.1 * exp( -aate2 * L) ))), #  calibrating parameters in a TE only model.
             data = dfrHZE,  
             weights = NWeight,
@@ -97,8 +93,10 @@ hatC <- function(dose.1,L) { #  calibrated hazard function
 Calculate.hitC <- function(dose.1, L) {
   1 - exp(-hatC(dose.1, L)) #  Calibrated HZE TE IDER
 }
-IC<-cbind(AIC(hitm,hinm),BIC(hitm,hinm))
+
+############### Compare NTE and TE HZE models using Akaike and Bayesian information coefficients ########### IC<-cbind(AIC(hitm,hinm),BIC(hitm,hinm))
 print(IC)
+########################### End information coefficients #####################
 dose <- c(seq(0, .00001, by = 0.000001), #  look carefully near zero, but go out to 0.5 Gy
           seq(.00002, .0001, by=.00001),
           seq(.0002, .001, by=.0001),
@@ -154,9 +152,9 @@ Integrate_hiteMIXDER <- function(r, L, d = dose, aate1 = hit.c[1], aate2 = hit.c
   out = ode(yini, times = d, dE, pars, method = "radau")
   return(out)
 } 
-########### Light ion, low Z (<= 3), low LET model ######### 
+########### Light ion, low Z (<= 3), low LET model; here calculated separately from HZE models (see paper) ######### 
 dfrL <- subset(dfra, Z <= 3) #  for Light ions
-LOW.m <- nls(HG ~ .0275 + 1-exp(-bet * dose.1),
+LOW.m <- nls(HG ~ .0275 + 1-exp(-bet * dose.1), #LNT Hazard function with no quadratic component (see paper for why). bet has units Gy^-1
              data = dfrL,
              weights = NWeight,
              start = list(bet = .5))
@@ -170,9 +168,9 @@ dE_2 <- function(dose,L) { # Slope dE/dd of the low LET, low Z model; looking at
   LOW.c*exp(-LOW.c*dose)  
 }
 
-# plot () chunks such as the following are visual check to see if our calibration is consistent with 16Chang, .93Alp, .94Alp
-# and 17Cuc; (ggplot commands are Yinmin's and concern CI)
-# Put various values in our calibrated model to check with numbers and graphs in these references
+# plot () chunks such as the following are visual checks to see if our calibration is consistent with 16Chang, .93Alp, .94Alp
+# and 17Cuc. Put various values in our calibrated model to check with numbers and graphs in these references
+# However later ggplot commands concern 95% confidence limits (CI) for the I(d) baseline MIXDER.
 plot(c(0, 7), c(0, 1), col = 'red', ann = 'F') 
 ddose <- 0.01 * 0:700; lines(ddose, CalculateLOW.C(ddose, 0) + .0275)  #  calibrated lowLET IDER
 points(dfrL[1:8, "dose.1"], dfrL[1:8,"HG"],pch=19) #  RKS: Helium data points
@@ -196,7 +194,7 @@ calculateComplexId <- function(r, L, d, aa1 = hin.c[1], aa2 = hin.c[2], kk1 = hi
       u <- vector(length = length(L))  
       for (i in 1:length(L)) {
         aa[i] <- aa1 * L[i] * exp(-aa2 * L[i])
-        u[i] <- uniroot(function(d) 1-exp(-0.01*(aa1*L[i]*d*exp(-aa2*L[i])+(1-exp(-phi*d))*kk1)) - I, lower = 0, upper = 200, extendInt = "yes", tol = 10^-10)$root #egh this is used in the single HZE and lowLET example
+        u[i] <- uniroot(function(d) 1-exp(-0.01*(aa1*L[i]*d*exp(-aa2*L[i])+(1-exp(-phi*d))*kk1)) - I, lower = 0, upper = 200, extendInt = "yes", tol = 10^-10)$root #egh: this is used in the single HZE and lowLET example
       }
       dI <- vector(length = length(L))
       for (i in 1:length(L)) {
